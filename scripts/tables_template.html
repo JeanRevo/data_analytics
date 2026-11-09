@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tables ventes légumes</title>
+<style>
+:root{
+  --bg:#f7f7f4; --surface:#fff; --ink:#1d2421; --muted:#5d6762; --line:#dcdfd9;
+  --accent:#2f7d5b; --accent-soft:#e3f1ea; --warn:#a15c00; --warn-soft:#fbefd9;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#141816; --surface:#1c211f; --ink:#e8ece9; --muted:#9aa5a0; --line:#2f3733;
+    --accent:#58b88a; --accent-soft:#1d332a; --warn:#e0a24a; --warn-soft:#3a2d17;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141816; --surface:#1c211f; --ink:#e8ece9; --muted:#9aa5a0; --line:#2f3733;
+  --accent:#58b88a; --accent-soft:#1d332a; --warn:#e0a24a; --warn-soft:#3a2d17;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1080px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.5rem;margin:0 0 4px}
+h2{font-size:1.05rem;margin:32px 0 12px}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+svg{width:100%;height:auto;display:block}
+.erdwrap{overflow-x:auto}
+.erdwrap svg{min-width:680px}
+.tbox{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+.thead{fill:var(--accent-soft)}
+.ttitle{font:600 13px system-ui,sans-serif;fill:var(--ink)}
+.tcol{font:12px var(--mono);fill:var(--ink)}
+.ttype{font:11px var(--mono);fill:var(--muted)}
+.tkey{font:600 10px system-ui,sans-serif;fill:var(--accent)}
+.rel{stroke:var(--accent);stroke-width:1.5;fill:none}
+.card-n{font:600 11px system-ui,sans-serif;fill:var(--accent)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.tab{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.tab .n{color:inherit;opacity:.75;font-size:.85em;margin-left:6px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.stat{background:var(--accent-soft);border-radius:8px;padding:6px 12px}
+.stat b{display:block;font-size:1.05rem}
+.stat span{color:var(--muted);font-size:.8rem}
+.scroll{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:var(--surface);font-weight:600;z-index:1}
+td.num{text-align:right;font-family:var(--mono)}
+td.mono,.mono{font-family:var(--mono)}
+tr:last-child td{border-bottom:0}
+.pill{font-size:.72rem;border-radius:99px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);margin-right:4px}
+input[type=search]{width:100%;max-width:340px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;margin:0 0 10px}
+.note{color:var(--muted);font-size:.82rem;margin:8px 0 0}
+.flagtable td:nth-child(2){text-align:right;font-family:var(--mono)}
+.flagtable td{white-space:normal}
+.flagtable td:nth-child(4){min-width:300px}
+.flagtable .tag{color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:1px 7px;font-size:.78rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>Tables ventes légumes</h1>
+  <p class="sub">4 tables nettoyées (<span id="total"></span> lignes au total). Structure, relations, aperçu des données et lignes signalées.</p>
+
+  <h2>Relations</h2>
+  <div class="card"><div class="erdwrap"><svg id="erd" viewBox="0 0 900 490" role="img" aria-label="Diagramme des relations entre les quatre tables"></svg></div>
+  <p class="note">Les trois tables liées partent de <span class="mono">product.item_code</span>. <span class="mono">loss_rate</span> en 1 pour 1, <span class="mono">price</span> et <span class="mono">transaction</span> en 1 pour N.</p></div>
+
+  <h2>Tables</h2>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="card" id="panel"></div>
+
+  <h2>Lignes signalées, non modifiées</h2>
+  <div class="card">
+    <div class="scroll"><table class="flagtable"><thead><tr><th>Vue SQL</th><th>Lignes</th><th>Table</th><th>Signification</th></tr></thead><tbody id="flags"></tbody></table></div>
+    <p class="note">Ces lignes ne sont ni corrigées ni supprimées : elles demandent un arbitrage métier. Les seuils sont des heuristiques de travail. Requêtes dans sql/04_flags.sql.</p>
+  </div>
+</main>
+<script>
+const D = /*__DATA__*/null;
+const fmt = new Intl.NumberFormat('fr-FR');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const isNum = t => /int|dec|real|num/.test(t);
+const names = Object.keys(D.tables);
+
+document.getElementById('total').textContent = fmt.format(names.reduce((a, n) => a + D.tables[n].total, 0));
+
+/* --- diagramme --- */
+(function erd(){
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('erd');
+  const W = 270, HH = 30, RH = 22;
+  const pos = { product:[30,110], loss_rate:[600,10], price:[600,125], transaction:[600,255] };
+  const anchor = {};
+  const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+  for (const n of names) {
+    const [x, y] = pos[n], cols = D.tables[n].columns, h = HH + cols.length * RH;
+    svg.appendChild(mk('rect', {x, y, width: W, height: h, rx: 8, class: 'tbox'}));
+    svg.appendChild(mk('path', {d: `M${x},${y+HH} v-${HH-8} a8,8 0 0 1 8,-8 h${W-16} a8,8 0 0 1 8,8 v${HH-8} z`, class: 'thead'}));
+    svg.appendChild(mk('text', {x: x+12, y: y+20, class: 'ttitle'}, n));
+    cols.forEach((c, i) => {
+      const cy = y + HH + i * RH + 15;
+      svg.appendChild(mk('text', {x: x+12, y: cy, class: 'tcol'}, c.name));
+      svg.appendChild(mk('text', {x: x+W-12, y: cy, class: 'ttype', 'text-anchor': 'end'}, c.type));
+      const key = (c.pk ? 'PK' : '') + (c.fk ? (c.pk ? ' FK' : 'FK') : '');
+      if (key) svg.appendChild(mk('text', {x: x+W-78, y: cy, class: 'tkey', 'text-anchor': 'end'}, key));
+      if (c.name === 'item_code') anchor[n] = cy - 4;
+    });
+  }
+  const px = pos.product[0] + W, mid = 450;
+  for (const [child, card] of [['loss_rate','1'],['price','N'],['transaction','N']]) {
+    const cx = pos[child][0], ay = anchor[child], py = anchor.product;
+    svg.appendChild(mk('path', {d: `M${px},${py} H${mid} V${ay} H${cx}`, class: 'rel'}));
+    svg.appendChild(mk('text', {x: px+8, y: py-6, class: 'card-n'}, '1'));
+    svg.appendChild(mk('text', {x: cx-14, y: ay-6, class: 'card-n'}, card));
+  }
+})();
+
+/* --- onglets --- */
+const tabs = document.getElementById('tabs'), panel = document.getElementById('panel');
+function show(n){
+  [...tabs.children].forEach(b => b.setAttribute('aria-selected', b.dataset.t === n));
+  const t = D.tables[n];
+  const stats = [['Lignes', fmt.format(t.total)], ...t.stats.map(([l, v]) => [l, typeof v === 'number' ? fmt.format(v) : v])];
+  const schema = t.columns.map(c => `<tr><td class="mono">${esc(c.name)}</td><td class="mono">${esc(c.type)}</td><td>${c.pk ? '<span class="pill">PK</span>' : ''}${c.fk ? `<span class="pill">FK → ${esc(c.fk)}</span>` : ''}</td></tr>`).join('');
+  const head = t.columns.map(c => `<th>${esc(c.name)}</th>`).join('');
+  panel.innerHTML = `
+    <div class="stats">${stats.map(([l, v]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
+    <div class="scroll" style="max-height:none;margin-bottom:16px"><table><thead><tr><th>Colonne</th><th>Type</th><th>Clés</th></tr></thead><tbody>${schema}</tbody></table></div>
+    <input type="search" id="q" placeholder="Filtrer l'aperçu…" aria-label="Filtrer l'aperçu">
+    <div class="scroll"><table><thead><tr>${head}</tr></thead><tbody id="rows"></tbody></table></div>
+    <p class="note" id="count"></p>`;
+  const body = document.getElementById('rows'), count = document.getElementById('count');
+  const render = f => {
+    const needle = f.toLowerCase();
+    const rows = needle ? t.rows.filter(r => r.some(v => String(v).toLowerCase().includes(needle))) : t.rows;
+    body.innerHTML = rows.map(r => '<tr>' + r.map((v, i) => `<td class="${isNum(t.columns[i].type) ? 'num' : ''}">${esc(v)}</td>`).join('') + '</tr>').join('');
+    const partial = t.rows.length < t.total ? ` Le filtre porte uniquement sur l'aperçu : les ${fmt.format(t.rows.length)} premières lignes sur ${fmt.format(t.total)}.` : '';
+    count.textContent = `${fmt.format(rows.length)} ligne(s) affichée(s).${partial}`;
+  };
+  render('');
+  document.getElementById('q').addEventListener('input', e => render(e.target.value));
+}
+for (const n of names) {
+  const b = document.createElement('button');
+  b.className = 'tab'; b.dataset.t = n; b.setAttribute('role', 'tab');
+  b.innerHTML = `${esc(n)}<span class="n">${fmt.format(D.tables[n].total)}</span>`;
+  b.onclick = () => show(n);
+  tabs.appendChild(b);
+}
+show(names[0]);
+
+/* --- signalements --- */
+document.getElementById('flags').innerHTML = D.flags.map(f =>
+  `<tr><td class="mono">${esc(f.view)}</td><td>${fmt.format(f.rows)}</td><td><span class="tag">${esc(f.table)}</span></td><td>${esc(f.desc)}</td></tr>`).join('');
+</script>
+</body>
+</html>
