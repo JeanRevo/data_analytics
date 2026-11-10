@@ -72,7 +72,10 @@ for t in TABLES:
         "rows": rows,
         "stats": [[label, con.execute(sql).fetchone()[0]] for label, sql in STATS_SQL[t]],
     }
+existing = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='view'")}
 for v, (tbl, desc) in FLAG_DOC.items():
+    if v not in existing:  # vue pas encore écrite par le contributeur de la table
+        continue
     data["flags"].append({"view": v, "table": tbl, "rows": con.execute(f"SELECT COUNT(*) FROM {v}").fetchone()[0], "desc": desc})
 
 payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
